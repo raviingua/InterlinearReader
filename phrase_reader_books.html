@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Phrase Reader</title>
+<style>
+  :root{
+    --bg:#0c0d10; --panel:#15171d; --line:#262a33; --dim:#8b8f99; --text:#f0ede6;
+    --accent:#e5342b; --sbg:#101216; --stext:#ecebe6; --gloss:#1a4db3;
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f3f0; --panel:#ffffff; --line:#dedcd6; --dim:#767a82; --text:#17181c;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{position:fixed;inset:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;overflow:hidden}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  .wrap{height:100%;display:flex;flex-direction:column}
+
+  #setup{padding:18px;display:flex;flex-direction:column;gap:12px;height:100%;overflow:auto}
+  h1{font-weight:700;font-size:24px;letter-spacing:-.3px}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--dim);font-size:13px;line-height:1.5;max-width:56ch}
+  .ta-wrap{position:relative;flex:1;min-height:110px;display:flex}
+  textarea{flex:1;width:100%;resize:none;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;color:var(--text);padding:14px;font-size:16px;line-height:1.5;font-family:inherit}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  .counter{position:absolute;right:12px;bottom:10px;font-size:11px;color:var(--dim);background:var(--panel);padding:2px 6px;border-radius:6px}
+  .clearBtn{position:absolute;left:12px;bottom:10px;font-size:11.5px;font-weight:600;color:var(--dim);background:var(--panel);border:1px solid var(--line);padding:5px 11px;border-radius:8px}
+  .clearBtn:active{background:var(--line)}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:10.5px;letter-spacing:.6px;color:var(--dim);text-transform:uppercase}
+  .field label b{color:var(--text)}
+  .seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{flex:1;padding:11px 4px;font-size:12.5px;color:var(--dim);font-weight:500}
+  .seg button.sel{background:var(--accent);color:#fff;font-weight:600}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row{display:flex;gap:10px}
+  input[type=range]{width:100%;accent-color:var(--accent);height:26px}
+  select{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px;font-size:13px;font-family:inherit}
+  select:focus{outline:none;border-color:var(--accent)}
+  #bookPass{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px;font-size:13px;font-family:inherit}
+  #bookPass:focus{outline:none;border-color:var(--accent)}
+  .remember{display:flex;flex-direction:row;align-items:center;gap:7px;font-size:11px;color:var(--dim);text-transform:none;letter-spacing:0;margin-top:4px}
+  .remember input{width:auto;height:auto;accent-color:var(--accent)}
+  .btn{background:var(--accent);color:#fff;font-weight:600;font-size:16px;padding:15px 20px;border-radius:11px;flex:1}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--dim);font-weight:500}
+  .btn:active{transform:translateY(1px)}
+  .hint{color:var(--dim);font-size:11.5px;line-height:1.4}
+  .err{color:var(--accent);font-size:12.5px;min-height:15px}
+
+  #reader{display:none}
+  #reader.on{display:flex;flex-direction:column;height:100%}
+  .stage{flex:1 1 auto;min-height:0;position:relative;overflow:hidden;background:var(--sbg);color:var(--stext);transition:background .2s,color .2s}
+  .topbar{position:absolute;top:10px;left:0;right:0;display:flex;justify-content:space-between;padding:0 12px;z-index:5}
+  .pill{font-size:12px;color:var(--dim);background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:8px;padding:6px 11px}
+  .stage[data-light="1"] .pill{background:rgba(255,255,255,.65);color:#333;border-color:#ccc}
+
+  .translation{position:absolute;left:6%;right:6%;bottom:calc(50% + 74px);max-height:132px;overflow:hidden;
+    text-align:center;font-size:clamp(17px,5vw,34px);line-height:1.3;color:var(--stext);opacity:.7;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;z-index:2;display:none;pointer-events:none}
+
+  /* Interlinear (ruby/rt) display.
+     #ilDisplay centers a single block child (.ilInner) both ways. .ilInner
+     itself must NOT be flex/grid: <ruby> is inline-level by default, and it's
+     that native inline flow -- not a per-word flex/grid box -- that makes the
+     browser's own ruby layout algorithm stack each <rt> gloss precisely over
+     its <ruby> base text, wrap naturally like running text, and keep normal
+     single-space gaps between words (real " " text nodes, not flex items,
+     which would otherwise get collapsed/misaligned). */
+  .ilDisplay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    padding:26px 22px;z-index:2;font-family:"Linux Libertine","Libertinus Serif",Georgia,serif;overflow-y:auto}
+  .ilDisplay .ilInner{width:100%;text-align:center;line-height:2.75}
+  .ilDisplay ruby{ruby-position:over;font-size:clamp(24px,6.2vw,44px);font-weight:500;color:var(--stext);margin:0 .07em}
+  .ilDisplay ruby strong{color:inherit;font-weight:700}
+  .ilDisplay.hide-gloss ruby rt{display:none}
+  .ilDisplay ruby rt{font-size:.56em;font-weight:400;color:var(--gloss)}
+
+  .tapzones{position:absolute;inset:0;display:flex;z-index:3}
+  .tapzones .z{flex:0 0 40%}.tapzones .z.mid{flex:0 0 20%}
+
+  .readout{flex:0 0 auto;display:flex;justify-content:space-between;padding:9px 18px;color:var(--dim);font-size:12px;font-variant-numeric:tabular-nums;border-top:1px solid var(--line);background:var(--panel)}
+  .readout b{color:var(--text);font-weight:600}
+  .speedrow{flex:0 0 auto;display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:8px;padding:8px 14px 4px;background:var(--panel)}
+  .speedrow button{height:52px;border-radius:11px;background:var(--bg);border:1px solid var(--line);font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px}
+  .speedrow .play{background:var(--accent);border-color:var(--accent);color:#fff;font-size:20px}
+  .speedrow button:active{transform:translateY(1px)}
+  .speedrow small{font-size:10px;color:var(--dim);font-weight:500}
+  .navrow{flex:0 0 auto;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:4px 12px 14px;background:var(--panel)}
+  .navrow button{height:44px;border-radius:10px;background:var(--bg);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:16px}
+  .navrow button:active{background:#1c2027}
+  .navrow button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .navrow small{font-size:8px;color:var(--dim);margin-top:1px;white-space:nowrap}
+  .navrow button.on small{color:rgba(255,255,255,.85)}
+
+  .cpanel{position:absolute;left:12px;right:12px;bottom:12px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;z-index:9;display:none;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+  .cpanel.on{display:block}
+  .cpanel h3{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+  .presets{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .preset{border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:12px;font-weight:600}
+  .pickers{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .picker{display:flex;flex-direction:column;gap:5px;align-items:center;font-size:11px;color:var(--dim)}
+  .picker input[type=color]{width:100%;height:38px;border:1px solid var(--line);border-radius:8px;background:none;padding:2px}
+  .cpanel .done{margin-top:12px;width:100%;background:var(--accent);color:#fff;font-weight:600;padding:11px;border-radius:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="setup">
+    <h1>Phrase Reader<span class="dot">.</span></h1>
+    <p class="sub">Pick a series, book and chapter to start reading, or paste your own interlinear HTML below. Each &lt;ruby&gt; word shows its gloss on top; only the base word is spoken and counted toward phrase length.</p>
+
+    <div id="bookBlock">
+      <div class="grid2">
+        <div class="field"><label>Series</label><select id="seriesSelect"></select></div>
+        <div class="field"><label>Book</label><select id="bookSelect"></select></div>
+      </div>
+      <div class="field"><label>Chapter</label><select id="chapterSelect"></select></div>
+      <div class="field" id="passField" style="display:none"><label>Password</label>
+        <input type="password" id="bookPass" placeholder="Passphrase for your books" autocomplete="off">
+        <label class="remember"><input type="checkbox" id="bookRemember"> Remember on this device</label>
+      </div>
+      <div class="row"><button class="btn" id="loadChapterBtn">Load chapter &amp; read</button></div>
+      <p class="hint" id="libNote" style="margin-top:2px">Or paste your own interlinear HTML below.</p>
+    </div>
+
+    <div class="ta-wrap">
+      <textarea id="input" placeholder="Paste interlinear HTML only, e.g. &lt;ruby&gt;word&lt;rt&gt;gloss&lt;/rt&gt;&lt;/ruby&gt; &lt;ruby&gt;word&lt;rt&gt;gloss&lt;/rt&gt;&lt;/ruby&gt; ..."></textarea>
+      <button type="button" class="clearBtn" id="clearBtn">Clear</button>
+      <span class="counter" id="counter">0 chars</span>
+    </div>
+
+    <div class="field">
+      <label>Max characters per phrase: <b id="mcVal">30</b></label>
+      <input type="range" id="mcRange" min="12" max="60" step="1" value="30">
+    </div>
+
+    <div class="field"><label>App theme</label>
+      <div class="seg" id="themeSeg"><button data-v="auto" class="sel">Auto</button><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
+    <div class="grid2">
+      <div class="field"><label>Language (for voice)</label>
+        <div class="seg" id="langSeg"><button data-v="auto" class="sel">Auto</button><button data-v="en">EN</button><button data-v="fr">FR</button></div></div>
+      <div class="field"><label>Voice (reads aloud)</label>
+        <div class="seg" id="ttsSeg"><button data-v="off" class="sel">Off</button><button data-v="on">On</button></div></div>
+    </div>
+    <div class="field" id="voiceField"><label>TTS voice</label>
+      <select id="voiceSelect"><option value="">Automatic (match language)</option></select>
+    </div>
+    <div class="field" id="voiceMethodField"><label>Voice selection method <span style="text-transform:none;color:var(--dim)">(try these if the wrong default voice is used)</span></label>
+      <select id="voiceMethodSelect">
+        <option value="auto">Auto (recommended – latest method)</option>
+        <option value="m1">Automatic 1 – Force language code</option>
+        <option value="m2">Automatic 2 – Match global default voice</option>
+        <option value="m3">Automatic 3 – Match per-language default voice</option>
+      </select>
+    </div>
+    <div class="field" id="syncField"><label>Phrase sync method <span style="text-transform:none;color:var(--dim)">(try these if phrases skip or lag behind the voice)</span></label>
+      <select id="syncSelect">
+        <option value="auto">Auto (recommended – picks based on device)</option>
+        <option value="boundary">Automatic 1 – Boundary events only</option>
+        <option value="timerFlat">Automatic 2 – Fixed-rate timer</option>
+        <option value="timerCal">Automatic 3 – Calibrated timer</option>
+      </select>
+    </div>
+
+    <p class="err" id="err"></p>
+    <div class="row"><button class="btn" id="parseBtn">Parse &amp; Read</button></div>
+    <div class="row">
+      <button class="btn ghost" id="sampleIL">Sample Interlinear (ruby/rt)</button>
+    </div>
+    <p class="hint">Tip: tap the reading area — the left 40% jumps to the previous sentence, the right 40% to the next, and the centre 20% replays the current one. Use the ‹ phrase › buttons to step through phrases silently (no audio). Speed and play/pause are on the buttons below.</p>
+  </section>
+
+  <section id="reader">
+    <div class="stage" id="stage">
+      <div class="topbar">
+        <button class="pill" id="closeBtn">✕ Close</button>
+        <button class="pill" id="glossBtn">Hide gloss</button>
+        <button class="pill" id="colorBtn">🎨 Colors</button>
+      </div>
+      <div class="translation" id="translation"></div>
+      <div class="ilDisplay" id="ilDisplay"></div>
+      <div class="tapzones"><div class="z" data-act="prevSentence"></div><div class="z mid" data-act="replay"></div><div class="z" data-act="nextSentence"></div></div>
+      <div class="cpanel" id="cpanel">
+        <h3>Colours</h3>
+        <div class="presets" id="presets">
+          <button class="preset" data-bg="#ffffff" data-text="#000000">B / W</button>
+          <button class="preset" data-bg="#101216" data-text="#ecebe6">Spritz</button>
+          <button class="preset" data-bg="#f3e9d2" data-text="#43392b">Sepia</button>
+          <button class="preset" data-bg="#000000" data-text="#c9c9c9">Night</button>
+        </div>
+        <div class="pickers">
+          <label class="picker">Background<input type="color" id="bgPick" value="#101216"></label>
+          <label class="picker">Text<input type="color" id="textPick" value="#ecebe6"></label>
+        </div>
+        <button class="done" id="cdone">Done</button>
+      </div>
+    </div>
+    <div class="readout">
+      <span><b id="pos">0</b> / <span id="total">0</span></span>
+      <span><b id="wpm">300</b> wpm</span>
+      <span><b id="timeleft">0:00</b> left</span>
+    </div>
+    <div class="speedrow">
+      <button data-act="slower">&#9668;<small>&minus;25</small></button>
+      <button class="play" data-act="toggle" id="playBtn">&#9658;</button>
+      <button data-act="faster"><small>+25</small>&#9658;</button>
+    </div>
+    <div class="navrow">
+      <button data-act="prevSentence">&#9198;<small>sentence</small></button>
+      <button data-act="reset">&#8635;<small>reset</small></button>
+      <button data-act="prevPhrase">&#8249;<small>phrase</small></button>
+      <button data-act="translate" id="translateBtn">&#127760;<small>translate</small></button>
+      <button data-act="nextPhrase">&#8250;<small>phrase</small></button>
+      <button data-act="replay">&#8634;<small>replay</small></button>
+      <button data-act="nextSentence">&#9197;<small>sentence</small></button>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+
+  var input=$('input'), counter=$('counter');
+  function updCount(){ counter.textContent=input.value.length+' chars'; }
+  input.addEventListener('input',updCount); updCount();
+
+  $('clearBtn').addEventListener('click',function(){ input.value=''; updCount(); input.focus(); $('err').textContent=''; });
+
+  var maxChars=30;
+  $('mcRange').addEventListener('input',function(){ maxChars=parseInt(this.value,10); $('mcVal').textContent=maxChars; });
+
+  /* very light EN/FR detector, used only to help pick a matching TTS voice */
+  function detectLang(t){ t=' '+t.toLowerCase()+' ';
+    var fr=(t.match(/ (le|la|les|des|une|un|est|et|dans|pour|avec|qui|que|vous|nous) /g)||[]).length+(t.match(/['\u2019]/g)||[]).length*0.3;
+    var en=(t.match(/ (the|and|is|of|to|in|that|you|it|for|was|with|are|this) /g)||[]).length;
+    return fr>en?'fr':'en'; }
+
+  /* ========== interlinear (ruby/rt) HTML parsing ========== */
+  // This app only understands interlinear HTML. Detected by the presence of
+  // a <ruby> tag; if that's missing we refuse to guess and show an error
+  // instead of silently mis-processing plain text.
+  function isInterlinearHTML(text){ return /<ruby[\s>]/i.test(text); }
+
+  // Pull each <ruby> element's base text (ignoring its <rt> gloss) and the
+  // gloss itself, in document order. <blockquote> wrappers are NOT dropped --
+  // the app simply reads the <ruby> content inside them like any other
+  // content (the blockquote element itself carries no special meaning here,
+  // only the rubies it contains). <strong> and other inline markup inside the
+  // base text is kept for display (baseHTML) but stripped for TTS/length
+  // purposes (baseText).
+  function extractRubyUnits(html){
+    var container=document.createElement('div');
+    container.innerHTML=html;
+    var units=[];
+    container.querySelectorAll('ruby').forEach(function(rEl){
+      var clone=rEl.cloneNode(true);
+      var rt=clone.querySelector('rt');
+      var rtHTML=rt? rt.innerHTML.trim() : '';
+      if(rt) rt.remove();
+      var baseHTML=clone.innerHTML.trim();
+      var baseText=(clone.textContent||'').trim();
+      if(!baseText) return;
+      units.push({baseHTML:baseHTML, rtHTML:rtHTML, baseText:baseText});
+    });
+    return units;
+  }
+
+  // Abbreviations (lowercased, period stripped) that end in "." but do NOT end
+  // a sentence. Small, curated, EN/FR-oriented list -- extend as needed.
+  var ABBREV={m:1,mm:1,mme:1,mlle:1,mr:1,mrs:1,ms:1,dr:1,st:1,ste:1,jr:1,sr:1,
+    etc:1,cf:1,vs:1,no:1,nos:1,al:1,ex:1,env:1,av:1,bd:1,ch:1,fig:1,vol:1,
+    ie:1,eg:1,pp:1,p:1};
+
+  // Improved sentence-boundary test. Given the current unit's base text and the
+  // NEXT unit's base text (null at end), decide whether the current unit closes
+  // a full sentence. Rules:
+  //   * must end with . ! or ? (allowing trailing closing quotes/brackets and
+  //     multi-punctuation like "?!" or "...")
+  //   * a bare "." after a known abbreviation, a single-letter initial ("M."),
+  //     or a digit ("3." / "3.14") is NOT a sentence end
+  //   * when a next unit exists, it must actually look like the start of a new
+  //     sentence (capital letter, digit, opening quote/bracket, or dash) -- so
+  //     stray mid-sentence periods don't split the sentence and starve the TTS
+  // This keeps each spoken utterance a whole grammatical sentence.
+  function endsSentence(curText, nextText){
+    var t=(curText||'').trim();
+    if(!t) return false;
+    var stripped=t.replace(/[»«"'\u2019\u201d\u2018\u201c\)\]]+$/,'');
+    var m=stripped.match(/([.!?]+)$/);
+    if(!m) return false;
+    var punct=m[1];
+    var word=stripped.slice(0, stripped.length-punct.length);
+    var lastToken=(word.split(/[\s\u00a0]+/).pop()||'').replace(/[^0-9A-Za-zÀ-ÿ]/g,'');
+    if(punct==='.'){
+      if(ABBREV[lastToken.toLowerCase()]) return false;                 // known abbreviation
+      if(/^[A-ZÀ-Þ]$/.test(lastToken)) return false;                    // single-letter initial "M."
+      if(/[0-9]$/.test(word)) return false;                             // decimal / "3." list marker
+    }
+    if(nextText){
+      var n=nextText.trim();
+      if(n && !/^[«"'\u2018\u201c\(\[0-9A-ZÀ-Þ\u2014\u2013—–-]/.test(n)) return false;
+    }
+    return true;
+  }
+
+  // Greedy packing: each <ruby> unit is atomic (never split). Keep adding
+  // units to the current phrase until the combined base-text length reaches
+  // or just exceeds maxChars, then start a new phrase -- i.e. we prefer to
+  // land just OVER the limit rather than stop short of it. A single unit
+  // whose own text already meets/exceeds maxChars becomes its own one-unit
+  // phrase. A sentence boundary (per endsSentence, with look-ahead) always
+  // forces a flush too, so no phrase spans two sentences. Since the raw
+  // HTML's own whitespace can't be relied on, a canonical single space is
+  // inserted between units when reconstructing text/length.
+  function packInterlinearPhrases(units,maxChars){
+    var phrases=[], cur=[], curLen=0, sentence=0;
+    function flush(){
+      if(!cur.length)return;
+      var text=cur.map(function(u){return u.baseText;}).join(' ');
+      var words=cur.reduce(function(a,u){return a+u.baseText.split(/\s+/).filter(Boolean).length;},0);
+      phrases.push({text:text, sentence:sentence, words:Math.max(1,words), units:cur});
+      cur=[]; curLen=0;
+    }
+    units.forEach(function(u,i){
+      if(!cur.length){ cur=[u]; curLen=u.baseText.length; }
+      else { cur.push(u); curLen+=1+u.baseText.length; }
+      var nextText=(i+1<units.length)? units[i+1].baseText : null;
+      var lengthTrigger=curLen>=maxChars, sentenceTrigger=endsSentence(u.baseText,nextText);
+      if(lengthTrigger||sentenceTrigger) flush();
+      if(sentenceTrigger) sentence++;
+    });
+    flush();
+    return phrases;
+  }
+
+  /* voices */
+  var voices=[], chosenVoiceURI='';
+  function loadVoices(){ try{ voices=window.speechSynthesis.getVoices()||[]; }catch(e){ voices=[]; } fillVoiceSelect(); }
+  function currentFilter(){ return (lang==='en'||lang==='fr')?lang:null; }
+  function fillVoiceSelect(){ var sel=document.getElementById('voiceSelect'); if(!sel)return;
+    var f=currentFilter(), prev=sel.value;
+    var list=voices.filter(function(v){ if(!v.lang)return false; var two=v.lang.slice(0,2).toLowerCase();
+      return f ? two===f : (two==='en'||two==='fr'); });
+    list.sort(function(a,b){ return voiceScore(b)-voiceScore(a); });
+    sel.innerHTML='<option value="">Automatic (match language)</option>';
+    list.forEach(function(v){ var o=document.createElement('option'); o.value=v.voiceURI;
+      o.textContent=v.name+' ('+v.lang+')'+(v.default?' – default':''); sel.appendChild(o); });
+    if(prev){ sel.value=prev; chosenVoiceURI=sel.value; } }
+  function defaultVoice(){ return voices.filter(function(v){return v.default;})[0]||null; }
+  function voiceScore(v){ var n=(v.name||'').toLowerCase(), s=0;
+    if(v.default)s+=6;
+    if(/enhanced|premium|natural|siri/.test(n))s+=4;
+    if(/compact|eloquence|espeak/.test(n))s-=5;
+    if(v.localService)s+=1;
+    return s; }
+  // Three interchangeable voice-selection strategies, tried in this order over
+  // time (see #voiceMethodSelect) -- user-selectable so you can compare them on
+  // your own device instead of guessing which one Safari/Android will honor.
+
+  // Method 1 (original): always force an explicit lang string, no voice object.
+  // Simple, but on iOS this makes WebKit resolve a plain default for that locale
+  // (commonly "Samantha"), bypassing whatever voice is configured in
+  // Settings -> Accessibility -> Spoken Content (e.g. Siri Voice 4).
+  function chooseVoiceM1(t){ return {forcedLang: t==='fr'?'fr-FR':'en-US'}; }
+
+  // Method 2 (first fix): only override if the single global default voice's
+  // language doesn't already match the text -- otherwise leave voice/lang unset.
+  function chooseVoiceM2(t){
+    var def=defaultVoice();
+    if(def&&def.lang&&def.lang.slice(0,2).toLowerCase()===t) return null;
+    var m=voices.filter(function(v){return v.lang&&v.lang.slice(0,2).toLowerCase()===t;});
+    if(!m.length) return null;
+    m.sort(function(a,b){return voiceScore(b)-voiceScore(a);});
+    return m[0];
+  }
+
+  // Method 3 (current/latest): also checks for a voice flagged default specifically
+  // for this language -- some iOS versions/devices expose a separate default per
+  // installed Spoken Content language, not just one global default.
+  function chooseVoiceM3(t){
+    var m=voices.filter(function(v){return v.lang&&v.lang.slice(0,2).toLowerCase()===t;});
+    if(!m.length) return null;
+    var langDefault=m.filter(function(v){return v.default;});
+    if(langDefault.length) return langDefault[0];
+    var def=defaultVoice();
+    if(def&&def.lang&&def.lang.slice(0,2).toLowerCase()===t) return null;
+    m.sort(function(a,b){return voiceScore(b)-voiceScore(a);});
+    return m[0];
+  }
+
+  var voiceMethod='auto';
+  function resolveVoiceMethod(){ return voiceMethod==='auto'?'m3':voiceMethod; }
+  function chooseVoice(t){
+    var method=resolveVoiceMethod();
+    if(method==='m1') return chooseVoiceM1(t);
+    if(method==='m2') return chooseVoiceM2(t);
+    return chooseVoiceM3(t);
+  }
+  $('voiceMethodSelect').addEventListener('change',function(){ voiceMethod=this.value; });
+
+  /* player */
+  var phrases=[],groups=[],groupOf=[],idx=0,wpm=300,playing=false,timer=null;
+  var lang='auto',ttsOn=false,currentLang='en';
+  var playMode='continue', playBoundIdx=0; // playMode 'single' = play current sentence only, then stop
+  var hasTTS=('speechSynthesis' in window);
+  if(hasTTS){ loadVoices(); try{ window.speechSynthesis.onvoiceschanged=loadVoices; }catch(e){} }
+  var stage=$('stage');
+
+  function buildGroups(){
+    groups=[]; groupOf=new Array(phrases.length); var cur=null;
+    phrases.forEach(function(p,gi){
+      if(!cur||cur.sentence!==p.sentence){ cur={sentence:p.sentence,items:[]}; groups.push(cur); }
+      cur.items.push(gi); groupOf[gi]=groups.length-1;
+    });
+    groups.forEach(function(g){ var t='',ranges=[];
+      g.items.forEach(function(gi,k){ if(k>0)t+=' '; var s=t.length; t+=phrases[gi].text; ranges.push([s,t.length,gi]); });
+      g.spokenText=t; g.ranges=ranges;
+    });
+  }
+
+  /* --- translation: shows the whole current sentence's translation above the
+         reading area, without disturbing the phrase-by-phrase layout below.
+         Tries, in order: Lingva Translate (Google-quality, free, keyless, via a
+         public instance) -> MyMemory (free, keyless, more stable uptime but
+         lower quality) -> the Anthropic API already used inside this artifact
+         (guaranteed reachable, used as a last resort if both public instances
+         are unreachable/blocked). Cached per sentence so each sentence is
+         only fetched once. --- */
+  var translateOn=false, translationCache={};
+  var TRANSLATE_EMAIL='ravihyd84@gmail.com'; // registered with MyMemory to raise the daily quota 10x; no signup needed
+  var PREFETCH_AHEAD=3; // number of upcoming sentences to translate in the background while reading
+  function renderTranslation(){
+    var el=$('translation');
+    if(!translateOn){ el.style.display='none'; return; }
+    el.style.display='block';
+    var gi=groupOf[idx];
+    if(gi==null||!groups[gi]){ el.textContent=''; return; }
+    var cached=translationCache[gi];
+    if(cached===undefined){ translationCache[gi]='__pending__'; el.textContent='Translating\u2026'; fetchTranslation(gi); prefetchAhead(gi); return; }
+    prefetchAhead(gi);
+    if(cached==='__pending__'){ el.textContent='Translating\u2026'; return; }
+    if(cached==='__err__'){ el.textContent='(translation unavailable)'; return; }
+    el.textContent=cached;
+  }
+  function fetchTranslation(gi){ fetchTranslationLingva(gi); }
+  // Quietly translates the next few sentences in the background (no display
+  // update, no "Translating..." shown) so that by the time you reach them via
+  // the red play button or sentence-nav, the translation is already cached and
+  // appears instantly instead of waiting on a network round-trip mid-read.
+  function prefetchAhead(fromGi){
+    if(!translateOn)return;
+    for(var i=1;i<=PREFETCH_AHEAD;i++){
+      var gi2=fromGi+i;
+      if(gi2>=groups.length)break;
+      if(translationCache[gi2]===undefined){ translationCache[gi2]='__pending__'; fetchTranslation(gi2); }
+    }
+  }
+
+  // Lingva Translate -- scrapes Google Translate's results without going through
+  // Google's own API, so no key needed. Public instances can go offline without
+  // warning, hence the fallback chain below.
+  function fetchTranslationLingva(gi){
+    var g=groups[gi]; if(!g){ translationCache[gi]='__err__'; return; }
+    var src=currentLang==='fr'?'fr':'en', tgt=src==='fr'?'en':'fr';
+    var url='https://translate.plausibility.cloud/api/v1/'+src+'/'+tgt+'/'+encodeURIComponent(g.spokenText);
+    fetch(url).then(function(r){ if(!r.ok)throw new Error('Lingva '+r.status); return r.json(); }).then(function(d){
+      var t=d&&d.translation;
+      if(t){ translationCache[gi]=t; if(groupOf[idx]===gi)renderTranslation(); }
+      else { fetchTranslationMyMemory(gi); }
+    }).catch(function(){ fetchTranslationMyMemory(gi); });
+  }
+  function fetchTranslationMyMemory(gi){
+    var g=groups[gi]; if(!g){ translationCache[gi]='__err__'; return; }
+    var src=currentLang==='fr'?'fr':'en', tgt=src==='fr'?'en':'fr';
+    var url='https://api.mymemory.translated.net/get?q='+encodeURIComponent(g.spokenText)+'&langpair='+src+'|'+tgt+'&de='+encodeURIComponent(TRANSLATE_EMAIL);
+    fetch(url).then(function(r){return r.json();}).then(function(d){
+      var t=d&&d.responseData&&d.responseData.translatedText;
+      if(t && d.responseStatus!==403){ translationCache[gi]=t; if(groupOf[idx]===gi)renderTranslation(); }
+      else { fetchTranslationAI(gi); }
+    }).catch(function(){ fetchTranslationAI(gi); });
+  }
+  // Final fallback for when both public instances are unreachable (e.g. blocked
+  // by the artifact sandbox's network allowlist) -- uses the Anthropic API that
+  // is guaranteed reachable inside this artifact.
+  function fetchTranslationAI(gi){
+    var g=groups[gi]; if(!g){ translationCache[gi]='__err__'; return; }
+    var src=currentLang==='fr'?'French':'English', tgt=src==='French'?'English':'French';
+    var sys='Translate the given '+src+' sentence into '+tgt+'. Return ONLY the translation, nothing else -- no notes, no quotes, no markdown.';
+    fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:300,system:sys,messages:[{role:"user",content:g.spokenText}]})})
+      .then(function(r){ if(!r.ok)throw new Error('API '+r.status); return r.json(); })
+      .then(function(d){
+        var t=(d.content||[]).filter(function(x){return x.type==='text';}).map(function(x){return x.text;}).join('').trim();
+        translationCache[gi]= t || '__err__';
+      }).catch(function(){ translationCache[gi]='__err__'; })
+      .then(function(){ if(groupOf[idx]===gi) renderTranslation(); });
+  }
+
+  /* Renders one phrase as real <ruby>/<rt> markup. The units are appended
+     into a single wrapper (.ilInner) rather than directly into the flex-
+     centered #ilDisplay -- #ilDisplay only ever has this one block child,
+     which it centers; inside that block the <ruby> elements and the plain
+     " " text nodes between them behave like ordinary running text, so the
+     browser's native ruby layout stacks each gloss over its own word with
+     normal, even word-spacing and correct line-wrapping. */
+  function renderInterlinearPhrase(p){
+    var el=$('ilDisplay'); el.innerHTML='';
+    if(!p||!p.units||!p.units.length)return;
+    var inner=document.createElement('div');
+    inner.className='ilInner';
+    p.units.forEach(function(u,i){
+      if(i>0) inner.appendChild(document.createTextNode(' '));
+      var ruby=document.createElement('ruby');
+      ruby.innerHTML=u.baseHTML;
+      var rt=document.createElement('rt');
+      rt.innerHTML=u.rtHTML;
+      ruby.appendChild(rt);
+      inner.appendChild(ruby);
+    });
+    el.appendChild(inner);
+  }
+  function renderPhrase(){
+    renderInterlinearPhrase(phrases[idx]);
+    $('pos').textContent=phrases.length?idx+1:0;
+    $('total').textContent=phrases.length;
+    $('wpm').textContent=wpm;
+    var w=0; for(var i=idx;i<phrases.length;i++)w+=phrases[i].words;
+    var s=Math.round(w/wpm*60);
+    $('timeleft').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+    $('playBtn').textContent=playing?'\u275a\u275a':'\u25b6';
+    renderTranslation();
+  }
+  function durationFor(p){return Math.max(180,(p.words/wpm)*60000);}
+
+  /* --- timed (no voice) --- */
+  function timedLoop(){ if(!playing)return; if(idx>playBoundIdx){stop();return;}
+    renderPhrase(); timer=setTimeout(function(){ idx++; timedLoop(); }, durationFor(phrases[idx])); }
+
+  /* --- voice: speak a whole SENTENCE per utterance, and only advance the
+         on-screen phrase highlight to follow the audio. In EVERY sync strategy
+         below the voice speaks the entire sentence in one continuous utterance
+         -- it never restarts or pauses phrase-by-phrase; the phrase display is
+         purely a visual highlight riding along on top of that one utterance.
+         Three interchangeable strategies (user-selectable, see #syncSelect):
+           boundary  – advance the highlight purely from onboundary events
+                       (original approach; best on iOS/desktop, which fire these
+                       reliably per word)
+           timerFlat – same single sentence utterance + onboundary, plus a flat
+                       wpm-based timer advancing the highlight as a fallback for
+                       engines that never fire onboundary (first Android fix)
+           timerCal  – same single sentence utterance + onboundary, but with a
+                       self-calibrating timer: the real ms-per-char rate is
+                       measured from each completed sentence's actual spoken
+                       duration and reused to time the highlight on the next
+                       sentence (more accurate Android fix)
+         "Auto" picks timerCal on Android and boundary elsewhere. --- */
+  var groupTimers=[];
+  function clearGroupTimers(){ groupTimers.forEach(clearTimeout); groupTimers=[]; }
+
+  var isAndroid=/Android/i.test(navigator.userAgent||navigator.vendor||'');
+  var androidMsPerChar=null; // calibrated lazily from real playback; reset when new text is parsed
+  var syncMethod='auto';
+  function resolveSyncMethod(){ return syncMethod==='auto' ? (isAndroid?'timerCal':'boundary') : syncMethod; }
+  $('syncSelect').addEventListener('change',function(){ syncMethod=this.value; androidMsPerChar=null; });
+
+  function applyVoiceSettings(u){
+    var v=null;
+    if(chosenVoiceURI){ v=voices.filter(function(x){return x.voiceURI===chosenVoiceURI;})[0]||null; }
+    else{ v=chooseVoice(currentLang); }
+    if(v&&v.forcedLang){ u.lang=v.forcedLang; }        // Method 1: explicit lang string, no voice object
+    else if(v){ u.voice=v; u.lang=v.lang; }            // a specific voice object was chosen/dropdown-picked
+    // else: leave voice/lang unset so iOS/Android use the device's own configured default
+    u.rate=Math.max(0.5,Math.min(2.0, wpm/180));
+  }
+  function now(){ return (window.performance&&performance.now)?performance.now():Date.now(); }
+  // wpm-based estimate, used as the sane starting point / clamp bound before we have a real measurement
+  function estMsPerChar(p){ return durationFor(p)/Math.max(1,p.text.length); }
+  // Called whenever a sentence group finishes speaking. In 'single' mode (sentence
+  // nav / replay), playback stops here instead of continuing to the next sentence.
+  function onGroupFinished(gi){
+    if(!playing)return;
+    if(playMode==='single'){ stop(); return; }
+    speakGroup(gi+1,null);
+  }
+
+  function speakGroup(gi,fromGlobal){
+    if(!playing)return;
+    if(gi>=groups.length){ stop(); return; }
+    var g=groups[gi], startOff=0, startK=0;
+    if(fromGlobal!=null){ for(var k=0;k<g.ranges.length;k++){ if(g.ranges[k][2]===fromGlobal){ startOff=g.ranges[k][0]; startK=k; break; } } }
+    idx=g.items[startK]; renderPhrase();
+    clearGroupTimers();
+
+    var method=resolveSyncMethod();
+    if(method==='timerCal'){ speakGroupCalibrated(g,startOff,startK,gi); return; }
+    if(method==='timerFlat'){ speakGroupFlatTimer(g,startOff,startK,gi); return; }
+    speakGroupBoundary(g,startOff,gi);
+  }
+
+  // Shared onboundary handler: whenever the engine reports a word position,
+  // snap the phrase highlight to whichever phrase-range contains that char.
+  function boundaryHighlighter(g,startOff){
+    return function(e){ if(!playing)return; var ci=(e.charIndex||0)+startOff;
+      for(var k=0;k<g.ranges.length;k++){ if(ci>=g.ranges[k][0]&&ci<g.ranges[k][1]){ if(idx!==g.ranges[k][2]){ idx=g.ranges[k][2]; renderPhrase(); } break; } } };
+  }
+
+  /* Method: boundary events only. One utterance for the whole sentence; the
+     highlight moves only when the engine fires per-word boundary events. */
+  function speakGroupBoundary(g,startOff,gi){
+    var speakText=g.spokenText.slice(startOff);
+    var u=new SpeechSynthesisUtterance(speakText);
+    applyVoiceSettings(u);
+    u.onboundary=boundaryHighlighter(g,startOff);
+    u.onend=function(){ onGroupFinished(gi); };
+    u.onerror=function(){ onGroupFinished(gi); };
+    window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+  }
+
+  // Pre-schedule timers that walk the highlight through a sentence's phrases,
+  // starting from item index startK, using the supplied per-char rate function.
+  function scheduleHighlightTimers(g,startK,rateFor){
+    var acc=0;
+    for(var k=startK+1;k<g.items.length;k++){
+      var prevPhrase=phrases[g.items[k-1]];
+      acc+=Math.max(150, prevPhrase.text.length*rateFor(prevPhrase));
+      (function(targetIdx,delay){
+        groupTimers.push(setTimeout(function(){
+          if(playing && idx!==targetIdx){ idx=targetIdx; renderPhrase(); }
+        },delay));
+      })(g.items[k],acc);
+    }
+  }
+
+  /* Method: one sentence utterance + onboundary, with a flat wpm-based timer
+     advancing the highlight alongside as a fallback for engines that never
+     fire onboundary at all. */
+  function speakGroupFlatTimer(g,startOff,startK,gi){
+    scheduleHighlightTimers(g,startK,function(p){ return estMsPerChar(p); });
+    var speakText=g.spokenText.slice(startOff);
+    var u=new SpeechSynthesisUtterance(speakText);
+    applyVoiceSettings(u);
+    u.onboundary=boundaryHighlighter(g,startOff);
+    u.onend=function(){ clearGroupTimers(); onGroupFinished(gi); };
+    u.onerror=function(){ clearGroupTimers(); onGroupFinished(gi); };
+    window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+  }
+
+  /* Method: one sentence utterance + onboundary, with a self-calibrating timer.
+     The whole sentence is spoken as a single utterance (never phrase-by-phrase);
+     the highlight advances on timers whose rate is measured from the ACTUAL
+     duration of each completed sentence, so successive sentences track the audio
+     more accurately on devices that don't fire onboundary. */
+  function speakGroupCalibrated(g,startOff,startK,gi){
+    scheduleHighlightTimers(g,startK,function(p){ return androidMsPerChar!=null?androidMsPerChar:estMsPerChar(p); });
+    var speakText=g.spokenText.slice(startOff);
+    var u=new SpeechSynthesisUtterance(speakText);
+    applyVoiceSettings(u);
+    var t0=now();
+    u.onboundary=boundaryHighlighter(g,startOff);
+    u.onend=function(){
+      // calibrate ms-per-char from the real time this sentence took to speak
+      var elapsed=now()-t0, chars=Math.max(1,speakText.length), measured=elapsed/chars;
+      if(isFinite(measured)&&measured>0){
+        var next = androidMsPerChar==null ? measured : (androidMsPerChar*0.5+measured*0.5);
+        // clamp against the wpm-based estimate so one odd measurement can't send timing wild
+        var base=estMsPerChar(phrases[g.items[startK]]), lo=base*0.4, hi=base*2.5;
+        androidMsPerChar=Math.max(lo,Math.min(hi,next));
+      }
+      clearGroupTimers(); onGroupFinished(gi);
+    };
+    u.onerror=function(){ clearGroupTimers(); onGroupFinished(gi); };
+    window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+  }
+
+  function play(singleSentenceOnly){ if(!phrases.length)return; if(idx>=phrases.length)idx=0;
+    playing=true;
+    if(singleSentenceOnly){
+      playMode='single';
+      var g=groups[groupOf[idx]||0];
+      playBoundIdx=g?g.items[g.items.length-1]:phrases.length-1;
+    } else {
+      playMode='continue';
+      playBoundIdx=phrases.length-1;
+    }
+    if(ttsOn&&hasTTS){ speakGroup(groupOf[idx]||0, idx); } else { timedLoop(); } }
+  function stop(){ playing=false; clearTimeout(timer); clearGroupTimers(); if(hasTTS){try{window.speechSynthesis.cancel();}catch(e){}} renderPhrase(); }
+  function toggle(){ playing?stop():play(); }
+  function goPhrase(d){ stop(); idx=Math.min(Math.max(idx+d,0),phrases.length-1); renderPhrase(); }
+  // Jump to the previous/next sentence and play just that sentence, then stop.
+  function playSentence(d){ stop(); var cs=phrases[idx]?phrases[idx].sentence:0;
+    var f=phrases.findIndex(function(p){return p.sentence===cs+d;}); if(f<0)f=d>0?phrases.length-1:0;
+    idx=Math.max(0,f); play(true); }
+  // Replay the current sentence from its start, then stop.
+  function replaySentence(){ stop(); var g=groups[groupOf[idx]||0]; if(g)idx=g.items[0]; play(true); }
+  function changeSpeed(d){ wpm=Math.max(100,Math.min(1200,wpm+d)); renderPhrase(); }
+  function reset(){ stop(); idx=0; renderPhrase(); }
+
+  function toggleTranslate(){
+    translateOn=!translateOn;
+    $('translateBtn').classList.toggle('on',translateOn);
+    renderTranslation();
+  }
+  var actions={toggle:toggle,reset:reset,slower:function(){changeSpeed(-25);},faster:function(){changeSpeed(25);},
+    replay:replaySentence,translate:toggleTranslate,
+    prevPhrase:function(){goPhrase(-1);},nextPhrase:function(){goPhrase(1);},
+    prevSentence:function(){playSentence(-1);},nextSentence:function(){playSentence(1);}};
+  document.addEventListener('click',function(e){ var el=e.target.closest('[data-act]'); if(el&&actions[el.dataset.act])actions[el.dataset.act](); });
+  document.addEventListener('keydown',function(e){ if(!$('reader').classList.contains('on'))return;
+    if(e.code==='Space'){e.preventDefault();toggle();}
+    else if(e.code==='ArrowLeft')goPhrase(-1); else if(e.code==='ArrowRight')goPhrase(1);
+    else if(e.code==='ArrowUp'){e.preventDefault();changeSpeed(25);}
+    else if(e.code==='ArrowDown'){e.preventDefault();changeSpeed(-25);} });
+
+  function applyPalette(bg,text){
+    var d=document.documentElement.style;
+    d.setProperty('--sbg',bg); d.setProperty('--stext',text);
+    $('bgPick').value=bg; $('textPick').value=text;
+    var lum=(parseInt(bg.slice(1,3),16)*0.299+parseInt(bg.slice(3,5),16)*0.587+parseInt(bg.slice(5,7),16)*0.114);
+    var isLight=lum>140;
+    stage.dataset.light=isLight?'1':'0';
+    // gloss (rt) colour follows the reading background, not the app theme:
+    // the requested dark blue on light pages, and a lighter blue on dark pages
+    // so it stays readable and never disappears into a dark background.
+    d.setProperty('--gloss', isLight ? '#1a4db3' : '#8ab4f8');
+  }
+  $('presets').addEventListener('click',function(e){ var b=e.target.closest('.preset'); if(!b)return; applyPalette(b.dataset.bg,b.dataset.text); });
+  ['bgPick','textPick'].forEach(function(id){ $(id).addEventListener('input',function(){ applyPalette($('bgPick').value,$('textPick').value); }); });
+  $('colorBtn').onclick=function(){$('cpanel').classList.toggle('on');};
+  $('glossBtn').onclick=function(){ var hidden=$('ilDisplay').classList.toggle('hide-gloss'); this.textContent=hidden?'Show gloss':'Hide gloss'; };
+  $('cdone').onclick=function(){$('cpanel').classList.remove('on');};
+
+  function seg(id,cb){ $(id).addEventListener('click',function(e){ var b=e.target.closest('button'); if(!b)return;
+    var ch=$(id).children; for(var i=0;i<ch.length;i++)ch[i].classList.remove('sel'); b.classList.add('sel'); cb(b.dataset.v); }); }
+
+  /* app theme: follows system by default, can be pinned light/dark */
+  var appTheme='auto';
+  function systemPrefersDark(){ return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); }
+  function stagePalette(theme){ return theme==='dark'?['#101216','#ecebe6']:['#ffffff','#000000']; }
+  function resolvedTheme(){ return appTheme==='auto' ? (systemPrefersDark()?'dark':'light') : appTheme; }
+  function syncStageTheme(){ var c=stagePalette(resolvedTheme()); applyPalette(c[0],c[1]); }
+  function applyAppTheme(){ document.documentElement.setAttribute('data-theme', appTheme==='auto' ? (systemPrefersDark()?'dark':'light') : appTheme); syncStageTheme(); }
+  seg('themeSeg',function(v){ appTheme=v; applyAppTheme(); });
+  if(window.matchMedia){ try{ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){ if(appTheme==='auto')applyAppTheme(); }); }catch(e){} }
+  applyAppTheme();
+  var _vs=document.getElementById('voiceSelect'); if(_vs)_vs.addEventListener('change',function(){ chosenVoiceURI=this.value; });
+  seg('langSeg',function(v){lang=v; fillVoiceSelect();});
+  seg('ttsSeg',function(v){ ttsOn=(v==='on'); if(ttsOn && !hasTTS)$('err').textContent='Voice not available in this browser.'; });
+
+  $('sampleIL').onclick=function(){ input.value=`<p class="interlinear">
+<ruby>La<rt>lah</rt></ruby> <ruby>soirée<rt>swah-RAY</rt></ruby> <ruby>avance.<rt>ah-VAHNS.</rt></ruby> <ruby>Il faut<rt>eel-FOH</rt></ruby> <ruby>choisir<rt>shwah-ZEER</rt></ruby> <ruby>le<rt>luh</rt></ruby> <ruby>livre<rt>LEE-vruh</rt></ruby> <ruby>du<rt>dew</rt></ruby> <ruby>mois<rt>MWAH</rt></ruby> <ruby>prochain.<rt>proh-SHAN.</rt></ruby> <ruby>Véronique<rt>vay-roh-NEEK</rt></ruby> <ruby>propose<rt>proh-POHZ</rt></ruby> <ruby>une<rt>EWN</rt></ruby> <ruby><strong>biographie</strong><rt>bee-oh-grah-FEE</rt></ruby> <ruby>de<rt>duh</rt></ruby> <ruby>Simone<rt>see-MUHN</rt></ruby> <ruby>de<rt>duh</rt></ruby> <ruby>Beauvoir.<rt>boh-VWAHR.</rt></ruby> <ruby>Marc<rt>MAHRK</rt></ruby> <ruby>suggère<rt>sew-ZHEHR</rt></ruby> <ruby>un<rt>uhn</rt></ruby> <ruby><strong>conte</strong><rt>KOHNT</rt></ruby> <ruby>de<rt>duh</rt></ruby> <ruby>Voltaire<rt>vuhl-TEHR</rt></ruby> <ruby>—<rt>—</rt></ruby> <ruby>«<rt>"</rt></ruby> <ruby>Candide<rt>kahn-DEED</rt></ruby> <ruby>»<rt>"</rt></ruby> <ruby>—<rt>—</rt></ruby> <ruby>pour<rt>poor</rt></ruby> <ruby>explorer<rt>eks-ploh-RAY</rt></ruby> <ruby><strong>les Lumières</strong>.<rt>lay-lew-MYEHR.</rt></ruby> <ruby>Sophie<rt>soh-FEE</rt></ruby> <ruby>veut<rt>VUH</rt></ruby> <ruby>de<rt>duh</rt></ruby> <ruby><strong>la poésie</strong><rt>lah-poh-ay-ZEE</rt></ruby> <ruby>pure.<rt>PEWR.</rt></ruby>
+</p>
+<blockquote><p class="interlinear">
+<ruby>La<rt>The</rt></ruby> <ruby>soirée<rt>evening</rt></ruby> <ruby>avance.<rt>progresses.</rt></ruby> <ruby>Il faut<rt>They must</rt></ruby> <ruby>choisir<rt>choose</rt></ruby> <ruby>le<rt>the</rt></ruby> <ruby>livre<rt>book</rt></ruby> <ruby>du<rt>for</rt></ruby> <ruby>mois<rt>next</rt></ruby> <ruby>prochain.<rt>month.</rt></ruby> <ruby>Véronique<rt>Véronique</rt></ruby> <ruby>propose<rt>proposes</rt></ruby> <ruby>une<rt>a</rt></ruby> <ruby><strong>biographie</strong><rt><strong>biography</strong></rt></ruby> <ruby>de<rt>of</rt></ruby> <ruby>Simone<rt>Simone</rt></ruby> <ruby>de<rt>de</rt></ruby> <ruby>Beauvoir.<rt>Beauvoir.</rt></ruby> <ruby>Marc<rt>Marc</rt></ruby> <ruby>suggère<rt>suggests</rt></ruby> <ruby>un<rt>a</rt></ruby> <ruby><strong>conte</strong><rt><strong>tale</strong></rt></ruby> <ruby>de<rt>by</rt></ruby> <ruby>Voltaire<rt>Voltaire</rt></ruby> <ruby>—<rt>—</rt></ruby> <ruby>«<rt>"</rt></ruby> <ruby>Candide<rt>Candide</rt></ruby> <ruby>»<rt>"</rt></ruby> <ruby>—<rt>—</rt></ruby> <ruby>pour<rt>to</rt></ruby> <ruby>explorer<rt>explore</rt></ruby> <ruby><strong>les Lumières</strong>.<rt><strong>the Enlightenment</strong>.</rt></ruby> <ruby>Sophie<rt>Sophie</rt></ruby> <ruby>veut<rt>wants</rt></ruby> <ruby>de<rt></rt></ruby> <ruby><strong>la poésie</strong><rt><strong>poetry</strong></rt></ruby> <ruby>pure.<rt>pure.</rt></ruby>
+</p></blockquote>`; updCount(); $('err').textContent=''; };
+
+  var lastParsedText=null;
+  function parseAndRead(text){
+    text=(text||'').trim();
+    $('err').textContent='';
+    if(!text){ input.focus(); return; }
+    if(!isInterlinearHTML(text)){
+      $('err').textContent='This reader only understands interlinear HTML — paste text containing <ruby>word<rt>gloss</rt></ruby> tags.';
+      return;
+    }
+    var units=extractRubyUnits(text);
+    if(!units.length){
+      $('err').textContent='No <ruby> content found.';
+      return;
+    }
+    if(text!==lastParsedText){ translationCache={}; lastParsedText=text; }
+    phrases=packInterlinearPhrases(units,maxChars);
+    currentLang=lang==='auto'?detectLang(units.map(function(u){return u.baseText;}).join(' ')):lang;
+    buildGroups();
+    idx=0; playing=false; androidMsPerChar=null;
+
+    $('setup').style.display='none';
+    $('reader').classList.add('on'); $('reader').style.display='flex';
+    renderPhrase();
+  }
+  $('parseBtn').addEventListener('click',function(){ parseAndRead(input.value); });
+
+  /* ===== book library (lazy-loaded + decrypted from ./data) =====
+     manifest.json holds series -> books -> chapter TITLES plus key-derivation
+     params (salt/iterations). Each book's chapter HTML lives in its own
+     AES-GCM-encrypted .enc file, fetched only when you open a chapter, then
+     decrypted in-browser with a key derived from your passphrase and cached.
+     Needs to be served over https (GitHub Pages / localhost); opened as a bare
+     local file, fetch + WebCrypto are blocked and the paste box still works. */
+  var MANIFEST=null, bookCache={}, CRYPTO_KEY=null, keyPass=null;
+  var seriesSel=$('seriesSelect'), bookSel=$('bookSelect'), chapSel=$('chapterSelect'),
+      passInput=$('bookPass'), rememberBox=$('bookRemember');
+  function curSeries(){ return MANIFEST&&MANIFEST.series[parseInt(seriesSel.value,10)||0]; }
+  function curBook(){ var s=curSeries(); return s&&s.books[parseInt(bookSel.value,10)||0]; }
+  function fill(sel,items,text){ sel.innerHTML=''; items.forEach(function(it,i){ var o=document.createElement('option'); o.value=i; o.textContent=text(it); sel.appendChild(o); }); }
+  function fillChapters(){ var b=curBook(); if(!b){chapSel.innerHTML='';return;} fill(chapSel,b.chapters,function(t){return t;}); }
+  function fillBooks(){ var s=curSeries(); if(!s){bookSel.innerHTML='';return;} fill(bookSel,s.books,function(b){return b.label;}); fillChapters(); }
+  function fillSeries(){ fill(seriesSel,MANIFEST.series,function(s){return s.label;}); fillBooks(); }
+  if(seriesSel) seriesSel.addEventListener('change',fillBooks);
+  if(bookSel) bookSel.addEventListener('change',fillChapters);
+
+  // remember the passphrase on this device (personal use); harmless if blocked
+  try{ var saved=localStorage.getItem('bookPass'); if(saved&&passInput){ passInput.value=saved; if(rememberBox)rememberBox.checked=true; } }catch(e){}
+
+  function b64ToBuf(b64){ var s=atob(b64), a=new Uint8Array(s.length); for(var i=0;i<s.length;i++)a[i]=s.charCodeAt(i); return a; }
+  function deriveKey(pass,c){
+    return crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey'])
+      .then(function(base){ return crypto.subtle.deriveKey({name:'PBKDF2', salt:b64ToBuf(c.salt), iterations:c.iter, hash:c.hash||'SHA-256'}, base, {name:'AES-GCM', length:256}, false, ['decrypt']); });
+  }
+  function decryptBook(obj,key){
+    return crypto.subtle.decrypt({name:'AES-GCM', iv:b64ToBuf(obj.iv)}, key, b64ToBuf(obj.ct))
+      .then(function(pt){ return JSON.parse(new TextDecoder().decode(pt)); });
+  }
+  function ensureKey(){
+    if(!MANIFEST.crypto) return Promise.resolve(null);
+    var pass=passInput?passInput.value:'';
+    if(!pass) return Promise.reject({noPass:true});
+    if(CRYPTO_KEY && keyPass===pass) return Promise.resolve(CRYPTO_KEY);
+    return deriveKey(pass,MANIFEST.crypto).then(function(k){ CRYPTO_KEY=k; keyPass=pass; return k; });
+  }
+  function rememberPass(){ try{ if(rememberBox&&rememberBox.checked) localStorage.setItem('bookPass',passInput.value); else localStorage.removeItem('bookPass'); }catch(e){} }
+
+  fetch('data/manifest.json').then(function(r){ if(!r.ok)throw 0; return r.json(); })
+    .then(function(m){ MANIFEST=m; fillSeries(); var pf=$('passField'); if(pf) pf.style.display = m.crypto ? '' : 'none'; })
+    .catch(function(){ var n=$('libNote'); if(n)n.textContent='Library couldn\u2019t load here — it needs to be served over https (e.g. GitHub Pages). You can still paste interlinear HTML below.';
+      [seriesSel,bookSel,chapSel,passInput].forEach(function(s){ if(s)s.disabled=true; }); if($('loadChapterBtn'))$('loadChapterBtn').disabled=true; });
+
+  if($('loadChapterBtn')) $('loadChapterBtn').addEventListener('click',function(){
+    var b=curBook(); if(!b)return; var ci=parseInt(chapSel.value,10)||0;
+    function open(content){ var c=content.chapters[ci]; if(!c){ $('err').textContent='Chapter not found.'; return; }
+      input.value=c.html; updCount(); $('err').textContent=''; parseAndRead(c.html); }
+    if(bookCache[b.id]){ open(bookCache[b.id]); return; }
+    $('err').textContent='Loading chapter\u2026';
+    ensureKey()
+      .then(function(key){ return fetch(b.file).then(function(r){ if(!r.ok)throw {load:true}; return r.json(); })
+        .then(function(raw){ return MANIFEST.crypto ? decryptBook(raw,key) : raw; }); })
+      .then(function(content){ bookCache[b.id]=content; rememberPass(); open(content); })
+      .catch(function(e){
+        if(e&&e.noPass){ $('err').textContent='Enter your books password above, then tap Load.'; }
+        else if(e&&e.load){ $('err').textContent='Could not load that book file ('+b.file+').'; }
+        else { CRYPTO_KEY=null; keyPass=null; $('err').textContent='Wrong password, or the book couldn\u2019t be decrypted.'; }
+      });
+  });
+  $('closeBtn').onclick=function(){ stop(); $('reader').classList.remove('on'); $('reader').style.display='none'; $('setup').style.display='flex'; };
+
+})();
+</script>
+</body>
+</html>
