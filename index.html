@@ -142,9 +142,9 @@
       <div class="seg" id="themeSeg"><button data-v="auto" class="sel">Auto</button><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
     <div class="grid2">
       <div class="field"><label>Language (for voice)</label>
-        <div class="seg" id="langSeg"><button data-v="auto" class="sel">Auto</button><button data-v="en">EN</button><button data-v="fr">FR</button></div></div>
+        <div class="seg" id="langSeg"><button data-v="auto">Auto</button><button data-v="en">EN</button><button data-v="fr" class="sel">FR</button></div></div>
       <div class="field"><label>Voice (reads aloud)</label>
-        <div class="seg" id="ttsSeg"><button data-v="off" class="sel">Off</button><button data-v="on">On</button></div></div>
+        <div class="seg" id="ttsSeg"><button data-v="off">Off</button><button data-v="on" class="sel">On</button></div></div>
     </div>
     <div class="field" id="voiceField"><label>TTS voice</label>
       <select id="voiceSelect"><option value="">Automatic (match language)</option></select>
@@ -152,7 +152,7 @@
     <div class="field" id="voiceMethodField"><label>Voice selection method <span style="text-transform:none;color:var(--dim)">(try these if the wrong default voice is used)</span></label>
       <select id="voiceMethodSelect">
         <option value="auto">Auto (recommended – latest method)</option>
-        <option value="m1">Automatic 1 – Force language code</option>
+        <option value="m1" selected>Automatic 1 – Force language code</option>
         <option value="m2">Automatic 2 – Match global default voice</option>
         <option value="m3">Automatic 3 – Match per-language default voice</option>
       </select>
@@ -394,7 +394,7 @@
     return m[0];
   }
 
-  var voiceMethod='auto';
+  var voiceMethod='m1';
   function resolveVoiceMethod(){ return voiceMethod==='auto'?'m3':voiceMethod; }
   function chooseVoice(t){
     var method=resolveVoiceMethod();
@@ -406,7 +406,7 @@
 
   /* player */
   var phrases=[],groups=[],groupOf=[],idx=0,wpm=300,playing=false,timer=null;
-  var lang='auto',ttsOn=false,currentLang='en';
+  var lang='fr',ttsOn=true,currentLang='en';
   var playMode='continue', playBoundIdx=0; // playMode 'single' = play current sentence only, then stop
   var hasTTS=('speechSynthesis' in window);
   if(hasTTS){ loadVoices(); try{ window.speechSynthesis.onvoiceschanged=loadVoices; }catch(e){} }
