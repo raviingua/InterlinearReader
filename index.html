@@ -135,7 +135,7 @@
 
     <div class="field">
       <label>Max characters per phrase: <b id="mcVal">12</b></label>
-      <input type="range" id="mcRange" min="6" max="60" step="1" value="30">
+      <input type="range" id="mcRange" min="6" max="60" step="1" value="12">
     </div>
 
     <div class="field"><label>App theme</label>
@@ -232,7 +232,7 @@
 
   $('clearBtn').addEventListener('click',function(){ input.value=''; updCount(); input.focus(); $('err').textContent=''; });
 
-  var maxChars=30;
+  var maxChars=12;
   $('mcRange').addEventListener('input',function(){ maxChars=parseInt(this.value,10); $('mcVal').textContent=maxChars; });
 
   /* very light EN/FR detector, used only to help pick a matching TTS voice */
