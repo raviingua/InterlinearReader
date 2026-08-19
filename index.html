@@ -75,7 +75,7 @@
   .ilDisplay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     padding:26px 22px;z-index:2;font-family:"Linux Libertine","Libertinus Serif",Georgia,serif;overflow-y:auto}
   .ilDisplay .ilInner{width:100%;text-align:center;line-height:2.75}
-  .ilDisplay ruby{ruby-position:over;font-size:clamp(24px,6.2vw,44px);font-weight:500;color:var(--stext);margin:0 .07em}
+  .ilDisplay ruby{ruby-position:over;font-size:calc(clamp(24px,6.2vw,44px) * var(--ilScale,1));font-weight:500;color:var(--stext);margin:0 .07em}
   .ilDisplay ruby strong{color:inherit;font-weight:700}
   .ilDisplay.hide-gloss ruby rt{display:none}
   .ilDisplay ruby rt{font-size:.56em;font-weight:400;color:var(--gloss)}
@@ -91,7 +91,7 @@
   .speedrow .play{background:var(--accent);border-color:var(--accent);color:#fff;font-size:20px}
   .speedrow button:active{transform:translateY(1px)}
   .speedrow small{font-size:10px;color:var(--dim);font-weight:500}
-  .navrow{flex:0 0 auto;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:4px 12px 14px;background:var(--panel)}
+  .navrow{flex:0 0 auto;display:grid;grid-template-columns:repeat(9,1fr);gap:6px;padding:4px 12px 14px;background:var(--panel)}
   .navrow button{height:44px;border-radius:10px;background:var(--bg);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:16px}
   .navrow button:active{background:#1c2027}
   .navrow button.on{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -236,6 +236,7 @@
         <button data-act="faster"><small>+25</small>&#9658;</button>
       </div>
       <div class="navrow">
+        <button data-act="fontDown" title="Decrease text size">A&#8722;<small>size</small></button>
         <button data-act="prevSentence">&#9198;<small>sentence</small></button>
         <button data-act="reset">&#8635;<small>reset</small></button>
         <button data-act="prevPhrase">&#8249;<small>phrase</small></button>
@@ -243,6 +244,7 @@
         <button data-act="nextPhrase">&#8250;<small>phrase</small></button>
         <button data-act="replay">&#8634;<small>replay</small></button>
         <button data-act="nextSentence">&#9197;<small>sentence</small></button>
+        <button data-act="fontUp" title="Increase text size">A&#43;<small>size</small></button>
       </div>
     </div>
   </section>
@@ -565,6 +567,23 @@
   }
   function durationFor(p){return Math.max(180,(p.words/wpm)*60000);}
 
+  /* --- reading text size: scales the ruby base word's font-size via the
+         --ilScale CSS custom property (see .ilDisplay ruby in the stylesheet).
+         The <rt> gloss is sized in em relative to its own <ruby>, so it grows
+         and shrinks right along with the base word automatically -- no extra
+         logic needed to keep them in sync. Persisted across chapters/sessions
+         via localStorage (best-effort; harmless if blocked). --- */
+  var ilScale=1;
+  var IL_SCALE_MIN=0.6, IL_SCALE_MAX=2.0, IL_SCALE_STEP=0.1;
+  function applyIlScale(){ document.documentElement.style.setProperty('--ilScale', ilScale.toFixed(2)); }
+  function changeIlScale(d){
+    ilScale=Math.round(Math.max(IL_SCALE_MIN,Math.min(IL_SCALE_MAX,ilScale+d))*100)/100;
+    applyIlScale();
+    try{ localStorage.setItem('ilScale', ilScale); }catch(e){}
+  }
+  try{ var savedScale=parseFloat(localStorage.getItem('ilScale')); if(isFinite(savedScale)&&savedScale>0){ ilScale=Math.max(IL_SCALE_MIN,Math.min(IL_SCALE_MAX,savedScale)); } }catch(e){}
+  applyIlScale();
+
   /* --- timed (no voice) --- */
   function timedLoop(){ if(!playing)return; if(idx>playBoundIdx){stop();return;}
     renderPhrase(); timer=setTimeout(function(){ idx++; timedLoop(); }, durationFor(phrases[idx])); }
@@ -735,6 +754,7 @@
   }
   var actions={toggle:toggle,reset:reset,slower:function(){changeSpeed(-25);},faster:function(){changeSpeed(25);},
     replay:replaySentence,translate:toggleTranslate,
+    fontDown:function(){changeIlScale(-IL_SCALE_STEP);},fontUp:function(){changeIlScale(IL_SCALE_STEP);},
     prevPhrase:function(){goPhrase(-1);},nextPhrase:function(){goPhrase(1);},
     prevSentence:function(){playSentence(-1);},nextSentence:function(){playSentence(1);}};
   document.addEventListener('click',function(e){ var el=e.target.closest('[data-act]'); if(el&&actions[el.dataset.act])actions[el.dataset.act](); });
