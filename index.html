@@ -55,13 +55,31 @@
   #reader{display:none}
   #reader.on{display:flex;flex-direction:column;height:100%}
   .stage{flex:1 1 auto;min-height:0;position:relative;overflow:hidden;background:var(--sbg);color:var(--stext);transition:background .2s,color .2s}
-  .topbar{position:absolute;top:10px;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:0 12px;z-index:5}
-  .pill{font-size:12px;color:var(--dim);background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:8px;padding:6px 11px}
+  .topbar{position:absolute;top:8px;left:0;right:0;display:flex;flex-direction:column;gap:6px;padding:0 10px;z-index:5}
+  .topbar-row{display:flex;justify-content:space-between;align-items:center;gap:6px}
+  .pill{font-size:12px;color:var(--dim);background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:8px;padding:6px 11px;white-space:nowrap}
+  .pill.icon{padding:6px 9px;font-size:13px;line-height:1}
   .stage[data-light="1"] .pill{background:rgba(255,255,255,.65);color:#333;border-color:#ccc}
-  .chapterNav{display:flex;align-items:center;gap:6px}
+  .chapterNav{display:flex;align-items:center;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+  .topbar-right{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+  .fontRow{justify-content:center;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .fontRow .pill{flex:0 0 auto}
 
-  .translation{position:absolute;left:6%;right:6%;bottom:calc(50% + 74px);max-height:132px;overflow:hidden;
-    text-align:center;font-size:clamp(17px,5vw,34px);line-height:1.3;color:var(--stext);opacity:.7;
+  .chapterToast{position:absolute;top:64px;left:50%;transform:translateX(-50%);max-width:88%;
+    background:rgba(0,0,0,.75);color:#fff;font-size:12.5px;line-height:1.4;text-align:center;
+    padding:9px 14px;border-radius:10px;z-index:8;opacity:0;pointer-events:none;transition:opacity .25s}
+  .chapterToast.show{opacity:1}
+  .stage[data-light="1"] .chapterToast{background:rgba(255,255,255,.88);color:#222;border:1px solid #ccc}
+
+  /* Translation is anchored to the BOTTOM of the reading stage and grows
+     upward as its content wraps to more lines (bottom is fixed, height is
+     intrinsic/auto) -- it never shifts or resizes the main word+gloss
+     display, which is centered independently via #ilDisplay's own
+     inset:0 flex centering below. A single short translation shows one
+     line just above the bottom edge; a long one grows upward, scrolling
+     internally past max-height instead of pushing into the main text. */
+  .translation{position:absolute;left:6%;right:6%;bottom:14px;max-height:40%;overflow-y:auto;
+    text-align:center;font-size:clamp(15px,4vw,28px);line-height:1.3;color:var(--stext);opacity:.75;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;z-index:2;display:none;pointer-events:none}
 
   /* Interlinear (ruby/rt) display.
@@ -78,7 +96,10 @@
   .ilDisplay ruby{ruby-position:over;font-size:calc(clamp(24px,6.2vw,44px) * var(--ilScale,1));font-weight:500;color:var(--stext);margin:0 .07em}
   .ilDisplay ruby strong{color:inherit;font-weight:700}
   .ilDisplay.hide-gloss ruby rt{display:none}
-  .ilDisplay ruby rt{font-size:.56em;font-weight:400;color:var(--gloss)}
+  /* Gloss size is intentionally NOT in em (which would tie it to the ruby
+     base word's font-size). It has its own clamp() base and its own
+     --glossScale multiplier, so the two sizes move fully independently. */
+  .ilDisplay ruby rt{font-size:calc(clamp(13px,3.4vw,24px) * var(--glossScale,1));font-weight:400;color:var(--gloss)}
 
   .tapzones{position:absolute;inset:0;display:flex;z-index:3}
   .tapzones .z{flex:0 0 40%}.tapzones .z.mid{flex:0 0 20%}
@@ -91,7 +112,7 @@
   .speedrow .play{background:var(--accent);border-color:var(--accent);color:#fff;font-size:20px}
   .speedrow button:active{transform:translateY(1px)}
   .speedrow small{font-size:10px;color:var(--dim);font-weight:500}
-  .navrow{flex:0 0 auto;display:grid;grid-template-columns:repeat(9,1fr);gap:6px;padding:4px 12px 14px;background:var(--panel)}
+  .navrow{flex:0 0 auto;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:4px 12px 14px;background:var(--panel)}
   .navrow button{height:44px;border-radius:10px;background:var(--bg);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:16px}
   .navrow button:active{background:#1c2027}
   .navrow button.on{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -122,9 +143,11 @@
     .navrow{flex:0 0 auto;display:flex;padding:4px 6px;gap:4px}
     .navrow button{height:34px;width:36px;border-radius:8px}
     .navrow small{display:none}
-    .topbar{top:4px}
+    .topbar{top:4px;gap:4px}
     .pill{padding:5px 9px;font-size:11px}
-    .translation{bottom:calc(50% + 54px);max-height:80px;font-size:clamp(14px,4vw,24px)}
+    .fontRow{gap:4px}
+    .chapterToast{top:46px;font-size:11px;padding:7px 11px}
+    .translation{bottom:8px;max-height:46%;font-size:clamp(12px,3.4vw,18px)}
   }
 </style>
 </head>
@@ -198,14 +221,27 @@
   <section id="reader">
     <div class="stage" id="stage">
       <div class="topbar">
-        <button class="pill" id="closeBtn">✕ Close</button>
-        <div class="chapterNav" id="chapterNav">
-          <button class="pill" id="prevChapterBtn" title="Previous chapter" style="display:none">‹ Prev</button>
-          <button class="pill" id="glossBtn">Hide gloss</button>
-          <button class="pill" id="nextChapterBtn" title="Next chapter" style="display:none">Next ›</button>
+        <div class="topbar-row">
+          <button class="pill" id="closeBtn">✕ Close</button>
+          <div class="chapterNav" id="chapterNav">
+            <button class="pill" id="prevChapterBtn" title="Previous chapter" style="display:none">‹ Prev</button>
+            <button class="pill" id="glossBtn">Hide gloss</button>
+            <button class="pill" id="nextChapterBtn" title="Next chapter" style="display:none">Next ›</button>
+          </div>
+          <div class="topbar-right">
+            <button class="pill icon" id="infoBtn" title="Current chapter &amp; book">ⓘ</button>
+            <button class="pill icon" id="colorBtn" title="Colours">🎨</button>
+          </div>
         </div>
-        <button class="pill" id="colorBtn">🎨 Colors</button>
+        <div class="topbar-row fontRow" id="fontRow">
+          <button class="pill" data-act="mainDown" title="Decrease text size">T&#8722;</button>
+          <button class="pill" data-act="mainUp" title="Increase text size">T&#43;</button>
+          <button class="pill" data-act="glossDown" title="Decrease gloss size">g&#8722;</button>
+          <button class="pill" data-act="glossUp" title="Increase gloss size">g&#43;</button>
+          <button class="pill" data-act="fontReset" title="Reset text &amp; gloss size">&#8635;</button>
+        </div>
       </div>
+      <div class="chapterToast" id="chapterToast"></div>
       <div class="translation" id="translation"></div>
       <div class="ilDisplay" id="ilDisplay"></div>
       <div class="tapzones"><div class="z" data-act="prevSentence"></div><div class="z mid" data-act="replay"></div><div class="z" data-act="nextSentence"></div></div>
@@ -236,7 +272,6 @@
         <button data-act="faster"><small>+25</small>&#9658;</button>
       </div>
       <div class="navrow">
-        <button data-act="fontDown" title="Decrease text size">A&#8722;<small>size</small></button>
         <button data-act="prevSentence">&#9198;<small>sentence</small></button>
         <button data-act="reset">&#8635;<small>reset</small></button>
         <button data-act="prevPhrase">&#8249;<small>phrase</small></button>
@@ -244,7 +279,6 @@
         <button data-act="nextPhrase">&#8250;<small>phrase</small></button>
         <button data-act="replay">&#8634;<small>replay</small></button>
         <button data-act="nextSentence">&#9197;<small>sentence</small></button>
-        <button data-act="fontUp" title="Increase text size">A&#43;<small>size</small></button>
       </div>
     </div>
   </section>
@@ -453,9 +487,11 @@
     });
   }
 
-  /* --- translation: shows the whole current sentence's translation above the
-         reading area, without disturbing the phrase-by-phrase layout below.
-         Tries, in order: Lingva Translate (Google-quality, free, keyless, via a
+  /* --- translation: shows the whole current sentence's translation anchored
+         to the bottom of the reading stage (see .translation in the
+         stylesheet), without disturbing the phrase-by-phrase word+gloss
+         display, which stays centered independently. Tries, in order:
+         Lingva Translate (Google-quality, free, keyless, via a
          public instance) -> MyMemory (free, keyless, more stable uptime but
          lower quality) -> the Anthropic API already used inside this artifact
          (guaranteed reachable, used as a last resort if both public instances
@@ -567,22 +603,51 @@
   }
   function durationFor(p){return Math.max(180,(p.words/wpm)*60000);}
 
-  /* --- reading text size: scales the ruby base word's font-size via the
-         --ilScale CSS custom property (see .ilDisplay ruby in the stylesheet).
-         The <rt> gloss is sized in em relative to its own <ruby>, so it grows
-         and shrinks right along with the base word automatically -- no extra
-         logic needed to keep them in sync. Persisted across chapters/sessions
+  /* --- reading text size: main word size and gloss size are two FULLY
+         INDEPENDENT scales, each applied via its own CSS custom property
+         (--ilScale for the <ruby> base word, --glossScale for its <rt>
+         gloss -- see the stylesheet). Because the gloss is no longer sized
+         in em relative to the ruby (it has its own clamp() base), changing
+         one never moves the other. Both persist across chapters/sessions
          via localStorage (best-effort; harmless if blocked). --- */
-  var ilScale=1;
-  var IL_SCALE_MIN=0.6, IL_SCALE_MAX=2.0, IL_SCALE_STEP=0.1;
-  function applyIlScale(){ document.documentElement.style.setProperty('--ilScale', ilScale.toFixed(2)); }
-  function changeIlScale(d){
-    ilScale=Math.round(Math.max(IL_SCALE_MIN,Math.min(IL_SCALE_MAX,ilScale+d))*100)/100;
-    applyIlScale();
-    try{ localStorage.setItem('ilScale', ilScale); }catch(e){}
+  var ilScale=1, glossScale=1;
+  var IL_SCALE_MIN=0.6, IL_SCALE_MAX=2.2, IL_SCALE_STEP=0.1;
+  var GLOSS_SCALE_MIN=0.5, GLOSS_SCALE_MAX=2.2, GLOSS_SCALE_STEP=0.1;
+  function applyFontScales(){
+    var d=document.documentElement.style;
+    d.setProperty('--ilScale', ilScale.toFixed(2));
+    d.setProperty('--glossScale', glossScale.toFixed(2));
   }
-  try{ var savedScale=parseFloat(localStorage.getItem('ilScale')); if(isFinite(savedScale)&&savedScale>0){ ilScale=Math.max(IL_SCALE_MIN,Math.min(IL_SCALE_MAX,savedScale)); } }catch(e){}
-  applyIlScale();
+  function persistFontScales(){ try{ localStorage.setItem('ilScale', ilScale); localStorage.setItem('glossScale', glossScale); }catch(e){} }
+  function changeIlScale(d){ ilScale=Math.round(Math.max(IL_SCALE_MIN,Math.min(IL_SCALE_MAX,ilScale+d))*100)/100; applyFontScales(); persistFontScales(); }
+  function changeGlossScale(d){ glossScale=Math.round(Math.max(GLOSS_SCALE_MIN,Math.min(GLOSS_SCALE_MAX,glossScale+d))*100)/100; applyFontScales(); persistFontScales(); }
+  function resetFontScales(){ ilScale=1; glossScale=1; applyFontScales(); persistFontScales(); }
+  try{
+    var savedIl=parseFloat(localStorage.getItem('ilScale'));
+    if(isFinite(savedIl)&&savedIl>0) ilScale=Math.max(IL_SCALE_MIN,Math.min(IL_SCALE_MAX,savedIl));
+    var savedGloss=parseFloat(localStorage.getItem('glossScale'));
+    if(isFinite(savedGloss)&&savedGloss>0) glossScale=Math.max(GLOSS_SCALE_MIN,Math.min(GLOSS_SCALE_MAX,savedGloss));
+  }catch(e){}
+  applyFontScales();
+
+  /* --- chapter info toast: tells you which book/chapter you're currently
+         reading (useful after stepping through several prev/next chapter
+         taps) without disturbing the reading layout -- a brief overlay that
+         fades in over the topbar and auto-hides. --- */
+  function showChapterToast(){
+    var el=$('chapterToast'); if(!el)return;
+    var msg;
+    if(currentBook){
+      var title=(currentBook.chapters && currentBook.chapters[currentChapterIdx]) || ('Chapter '+(currentChapterIdx+1));
+      msg=currentBook.label+' — '+title;
+    } else {
+      msg='Custom pasted text (not from the library)';
+    }
+    el.textContent=msg;
+    el.classList.add('show');
+    clearTimeout(el._hideTimer);
+    el._hideTimer=setTimeout(function(){ el.classList.remove('show'); },3000);
+  }
 
   /* --- timed (no voice) --- */
   function timedLoop(){ if(!playing)return; if(idx>playBoundIdx){stop();return;}
@@ -754,7 +819,9 @@
   }
   var actions={toggle:toggle,reset:reset,slower:function(){changeSpeed(-25);},faster:function(){changeSpeed(25);},
     replay:replaySentence,translate:toggleTranslate,
-    fontDown:function(){changeIlScale(-IL_SCALE_STEP);},fontUp:function(){changeIlScale(IL_SCALE_STEP);},
+    mainDown:function(){changeIlScale(-IL_SCALE_STEP);},mainUp:function(){changeIlScale(IL_SCALE_STEP);},
+    glossDown:function(){changeGlossScale(-GLOSS_SCALE_STEP);},glossUp:function(){changeGlossScale(GLOSS_SCALE_STEP);},
+    fontReset:resetFontScales,
     prevPhrase:function(){goPhrase(-1);},nextPhrase:function(){goPhrase(1);},
     prevSentence:function(){playSentence(-1);},nextSentence:function(){playSentence(1);}};
   document.addEventListener('click',function(e){ var el=e.target.closest('[data-act]'); if(el&&actions[el.dataset.act])actions[el.dataset.act](); });
@@ -779,6 +846,7 @@
   $('presets').addEventListener('click',function(e){ var b=e.target.closest('.preset'); if(!b)return; applyPalette(b.dataset.bg,b.dataset.text); });
   ['bgPick','textPick'].forEach(function(id){ $(id).addEventListener('input',function(){ applyPalette($('bgPick').value,$('textPick').value); }); });
   $('colorBtn').onclick=function(){$('cpanel').classList.toggle('on');};
+  $('infoBtn').onclick=showChapterToast;
   $('glossBtn').onclick=function(){ var hidden=$('ilDisplay').classList.toggle('hide-gloss'); this.textContent=hidden?'Show gloss':'Hide gloss'; };
   $('cdone').onclick=function(){$('cpanel').classList.remove('on');};
 
