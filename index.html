@@ -143,10 +143,22 @@
     .navrow{flex:0 0 auto;display:flex;padding:4px 6px;gap:4px}
     .navrow button{height:34px;width:36px;border-radius:8px}
     .navrow small{display:none}
-    .topbar{top:4px;gap:4px}
+    /* Topbar: collapse from 2 rows down to a single horizontally-scrollable
+       row in landscape/short-height mode, so it doesn't eat vertical space
+       from the reading stage. The two .topbar-row wrappers (nav row + font
+       row) go display:contents, which removes their own box/layout but
+       keeps their children -- close, chapter-nav cluster, info/colour
+       cluster, and the 5 font buttons -- as direct flex items of .topbar,
+       all in one line that scrolls sideways if it doesn't fit. */
+    .topbar{top:4px;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:5px;
+      overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 8px}
+    .topbar-row{display:contents}
+    .chapterNav{flex:0 0 auto}
+    .topbar-right{flex:0 0 auto}
+    .fontRow .pill{flex:0 0 auto}
     .pill{padding:5px 9px;font-size:11px}
     .fontRow{gap:4px}
-    .chapterToast{top:46px;font-size:11px;padding:7px 11px}
+    .chapterToast{top:40px;font-size:11px;padding:7px 11px}
     .translation{bottom:8px;max-height:46%;font-size:clamp(12px,3.4vw,18px)}
   }
 </style>
